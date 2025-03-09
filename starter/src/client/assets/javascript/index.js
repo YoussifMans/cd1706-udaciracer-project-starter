@@ -92,26 +92,42 @@ async function handleCreateRace() {
 	renderAt('#race', renderRaceStartView(store.track_name))
 
 	// TODO - Get player_id and track_id from the store
+	const { player_id, track_id } = store;
 	
 	// const race = TODO - call the asynchronous method createRace, passing the correct parameters
+	const race = await createRace(player_id, track_id);
 
 	// TODO - update the store with the race id in the response
 	// TIP - console logging API responses can be really helpful to know what data shape you received
 	console.log("RACE: ", race)
 	// store.race_id = 
+	store.race_id = race.ID;
 	
 	// The race has been created, now start the countdown
 	// TODO - call the async function runCountdown
-
+	await runCountdown()
 	// TODO - call the async function startRace
 	// TIP - remember to always check if a function takes parameters before calling it!
-
+	await startRace(race.ID);
 	// TODO - call the async function runRace
+	await runRace(race.ID);
 }
 
 function runRace(raceID) {
 	return new Promise(resolve => {
 	// TODO - use Javascript's built in setInterval method to get race info (getRace function) every 500ms
+		const raceInterval = setInterval(() => {
+			const state = getRace(raceID);
+			
+			if (state.status_text == "in-progress") {
+				renderAt("#leaderBoard", raceProgress(state.position))
+			}
+			if (state.status_text == "finished") {
+				clearInterval(raceInterval)
+				renderAt('#race', resultsView(state.position))
+				resolve(state)
+			}
+		}, 500);
 
 	/* 
 		TODO - if the race info status property is "in-progress", update the leaderboard by calling:
@@ -138,10 +154,16 @@ async function runCountdown() {
 
 		return new Promise(resolve => {
 			// TODO - use Javascript's built in setInterval method to count down once per second
+			const interval = setInterval(() => {
+				document.getElementById('big-numbers').innerHTML = --timer;
 
+				if (timer == 0) {
+					clearInterval(interval);
+					resolve();
+				}
+			}, 1000)
 			// run this DOM manipulation inside the set interval to decrement the countdown for the user
-			document.getElementById('big-numbers').innerHTML = --timer
-
+			
 			// TODO - when the setInterval timer hits 0, clear the interval, resolve the promise, and return
 
 		})
@@ -335,6 +357,13 @@ function defaultFetchOpts() {
 function getTracks() {
 	console.log(`calling server :: ${SERVER}/api/tracks`)
 	// GET request to `${SERVER}/api/tracks`
+	return fetch(`${SERVER}/api/tracks`)
+		.then((response) => {
+			return response.json();
+		})
+		.catch((error) => {
+			console.error(`Fetch returned error: ${error}`)
+		});
 
 	// TODO: Fetch tracks
 	// TIP: Don't forget a catch statement!
@@ -342,6 +371,13 @@ function getTracks() {
 
 function getRacers() {
 	// GET request to `${SERVER}/api/cars`
+	return fetch(`${SERVER}/api/cars`)
+		.then((response) => {
+			return response.json();
+		})
+		.catch((error) => {
+			console.error(`Fetch returned error: ${error}`)
+		})
 
 	// TODO: Fetch racers
 	// TIP: Do a file search for "TODO" to make sure you find all the things you need to do! There are even some vscode plugins that will highlight todos for you
@@ -362,8 +398,15 @@ function createRace(player_id, track_id) {
 	.catch(err => console.log("Problem with createRace request::", err))
 }
 
-function getRace(id) {
+async function getRace(id) {
 	// GET request to `${SERVER}/api/races/${id}`
+	return fetch(`${SERVER}/api/races/${id}`)
+	.then((response) => {
+		return response.json()
+	})
+	.catch((err) => {
+		console.log("Problem with getRace request::", err)
+	})
 }
 
 function startRace(id) {
@@ -379,4 +422,10 @@ function accelerate(id) {
 	// POST request to `${SERVER}/api/races/${id}/accelerate`
 	// options parameter provided as defaultFetchOpts
 	// no body or datatype needed for this request
+	return fetch(`${SERVER}/api/races/${id}/start`, {
+		method: 'POST',
+		...defaultFetchOpts()
+	})
+	.then(res => res.json())
+	.catch(err => console.error("Fetch returned error: ", err))
 }
