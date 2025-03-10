@@ -121,19 +121,22 @@ async function runRace(raceID) {
 	// TODO - use Javascript's built in setInterval method to get race info (getRace function) every 500ms
 		const raceInterval = setInterval(() => {
 
-			const res = getRace(store.race_id)
+			getRace(store.race_id)
+			.then((res) => {
+				if (res.status == "in-progress") {
+					renderAt('#leaderBoard', raceProgress(res.positions))
+				}
 
-			console.log(res)
+				if (res.status == "finished") {
+					clearInterval(raceInterval) // to stop the interval from repeating
+					renderAt('#race', resultsView(res.positions)) // to render the results view
+					resolve(res) // resolve the promise
+				}
+			})
+			.catch((error) => {
+				console.error(error)
+			})
 
-			if (res.status == "in-progress") {
-				renderAt('#leaderBoard', raceProgress(res.positions))
-			}
-
-			if (res.status == "finished") {
-				clearInterval(raceInterval) // to stop the interval from repeating
-				renderAt('#race', resultsView(res.positions)) // to render the results view
-				resolve(res) // resolve the promise
-			}
 		}, 500)
 	})
 	.catch(err => console.log(`runRace promise returned error::`, err))
@@ -195,6 +198,13 @@ function handleAccelerate() {
 	console.log("accelerate button clicked")
 	// TODO - Invoke the API call to accelerate
 	accelerate(store.race_id)
+
+	/*
+
+	HELP IDK WHAT IM SUPPOSED TO DO HERE!!!
+	
+	 */
+
 }
 
 // HTML VIEWS ------------------------------------------------
@@ -389,20 +399,10 @@ function getRace(id) {
 	.catch((err) => console.error("getRace fetch returned error::", err))
 }
 */
+
 async function getRace(id) {
-	const url = `${SERVER}/api/races/${id}`
-	
-	try {
-		const response = await fetch(url)
-		if (!response.ok) {
-			console.error("Fetch error::", response.status)
-		}
-		
-		const json = await response.json()
-		return json
-	} catch (error) {
-		console.error(error.message)
-	}
+	let response = await fetch(`${SERVER}/api/races/${id}`)
+	return response.json()
 }
 
 function startRace(id) {
