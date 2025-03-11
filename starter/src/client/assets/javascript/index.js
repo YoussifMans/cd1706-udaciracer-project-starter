@@ -86,61 +86,71 @@ async function delay(ms) {
 
 // This async function controls the flow of the race, add the logic and error handling
 async function handleCreateRace() {
-	console.log("in create race")
+    console.log("Creating race...");
 
-	// render starting UI
-	renderAt('#race', renderRaceStartView(store.track_name))
+    // Render starting UI
+    renderAt("#race", renderRaceStartView(store.track_name));
 
-	// TODO - Get player_id and track_id from the store
-	const { player_id, track_id } = store
-	
-	// const race = TODO - call the asynchronous method createRace, passing the correct parameters
-	const race = await createRace(player_id, track_id)
+    // Ensure IDs are correctly extracted
+    const { player_id, track_id } = store;
 
-	// TODO - update the store with the race id in the response
-	// TIP - console logging API responses can be really helpful to know what data shape you received
-	console.log("RACE: ", race)
-	console.log("STORE: ", store)
-	// store.race_id = 
-	store.race_id = race.ID
-	
-	// The race has been created, now start the countdown
-	// TODO - call the async function runCountdown
-	await runCountdown()
+    if (!player_id || !track_id) {
+        console.error("Player ID or Track ID is missing!");
+        return;
+    }
 
-	// TODO - call the async function startRace
-	// TIP - remember to always check if a function takes parameters before calling it!
-	await startRace(store.race_id)	
+    try {
+        // Create the race
+        const race = await createRace(player_id, track_id);
+        
+        if (!race || !race.ID) {
+            console.error("Race creation failed, response:", race);
+            return;
+        }
 
-	// TODO - call the async function runRace
-	await runRace(store.race_id)
+        // Store the race ID
+        store.race_id = race.ID;
+
+        console.log("Race created:", race);
+
+        // Start countdown
+        await runCountdown();
+
+        // Start race
+        await startRace(store.race_id);
+
+        // Run race
+        await runRace(store.race_id);
+    } catch (error) {
+        console.error("Error in handleCreateRace:", error);
+    }
 }
 
 async function runRace(raceID) {
-	return new Promise(resolve => {
-	// TODO - use Javascript's built in setInterval method to get race info (getRace function) every 500ms
-		const raceInterval = setInterval(() => {
+	return new Promise((resolve) => {
+        const raceInterval = setInterval(async () => {
+            try {
+                const res = await getRace(raceID);
 
-			getRace(store.race_id)
-			.then((res) => {
-				if (res.status == "in-progress") {
-					renderAt('#leaderBoard', raceProgress(res.positions))
-				}
+                if (!res) {
+                    console.error("Race fetch failed!");
+                    return;
+                }
 
-				if (res.status == "finished") {
-					clearInterval(raceInterval) // to stop the interval from repeating
-					renderAt('#race', resultsView(res.positions)) // to render the results view
-					resolve(res) // resolve the promise
-				}
-			})
-			.catch((error) => {
-				console.error(error)
-			})
+                if (res.status === "in-progress") {
+                    renderAt("#leaderBoard", raceProgress(res.positions));
+                }
 
-		}, 500)
-	})
-	.catch(err => console.log(`runRace promise returned error::`, err))
-	// remember to add error handling for the Promise
+                if (res.status === "finished") {
+                    clearInterval(raceInterval);
+                    renderAt("#race", resultsView(res.positions));
+                    resolve(res);
+                }
+            } catch (error) {
+                console.error("Error in runRace:", error);
+            }
+        }, 500);
+    });
 }
 
 async function runCountdown() {
@@ -283,30 +293,34 @@ function renderRaceStartView(track) {
 }
 
 function resultsView(positions) {
-	userPlayer.driver_name += " (you)"
-	let count = 1
+	let userPlayer = positions.find(e => e.id === parseInt(store.player_id)) // ✅ Define `userPlayer`
+    if (userPlayer) {
+        userPlayer.driver_name += " (you)"
+    }
+
+    let count = 1
   
-	const results = positions.map(p => {
+    const results = positions.map(p => {
 		return `
 			<tr>
-				<td>
-					<h3>${count++} - ${p.driver_name}</h3>
-				</td>
-			</tr>
-		`
-	})
+ 				<td>
+                    <h3>${count++} - ${p.driver_name}</h3>
+                </td>
+            </tr>
+        `
+    })
 
-	return `
+   return `
 		<header>
 			<h1>Race Results</h1>
-		</header>
-		<main>
-			<h3>Race Results</h3>
-			<p>The race is done! Here are the final results:</p>
-			${results.join('')}
-			<a href="/race">Start a new race</a>
-		</main>
-	`
+    	</header>
+    	<main>
+    		<h3>Race Results</h3>
+       		 <p>The race is done! Here are the final results:</p>
+       	 	${results.join('')}
+        	<a href="/race">Start a new race</a>
+    	</main>
+    `
 }
 
 function raceProgress(positions) {
@@ -378,18 +392,21 @@ function getRacers() {
 }
 
 function createRace(player_id, track_id) {
-	player_id = parseInt(player_id)
-	track_id = parseInt(track_id)
-	const body = { player_id, track_id }
-	
-	return fetch(`${SERVER}/api/races`, {
-		method: 'POST',
-		...defaultFetchOpts(),
-		dataType: 'jsonp',
-		body: JSON.stringify(body)
-	})
-	.then(res => res.json())
-	.catch(err => console.log("Problem with createRace request::", err))
+	const body = { player_id: parseInt(player_id), track_id: parseInt(track_id) };
+
+    return fetch(`${SERVER}/api/races`, {
+        method: "POST",
+        ...defaultFetchOpts(),
+        body: JSON.stringify(body),
+    })
+    .then((res) => res.json())
+    .then((data) => {
+        console.log("createRace response:", data);
+        return data;
+    })
+    .catch((err) => {
+        console.error("Problem with createRace request:", err);
+    });
 }
 /*
 function getRace(id) {
@@ -401,8 +418,13 @@ function getRace(id) {
 */
 
 async function getRace(id) {
-	let response = await fetch(`${SERVER}/api/races/${id}`)
-	return response.json()
+	try {
+        let response = await fetch(`${SERVER}/api/races/${id}`);
+        let data = await response.json();
+        return data;
+    } catch (err) {
+        console.error("getRace fetch returned error:", err);
+    }
 }
 
 function startRace(id) {
